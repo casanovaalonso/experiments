@@ -1,0 +1,279 @@
+let scale;
+let scaleZ;
+let score1 = 0; // Score for team 1 (bottom goal, y = 25)
+let score2 = 0; // Score for team 2 (top goal, y = -25)
+
+class Car {
+  constructor(
+    x,
+    y,
+    theta,
+    leftKey,
+    rightKey,
+    forwardKey,
+    backwardKey,
+    jumpKey,
+    colR,
+    colG,
+    colB
+  ) {
+    this.x = x;
+    this.y = y;
+    this.z = 0;
+    this.theta = theta;
+    this.speed = 0;
+    this.vz = 0;
+    this.onGround = true;
+    this.leftKey = leftKey;
+    this.rightKey = rightKey;
+    this.forwardKey = forwardKey;
+    this.backwardKey = backwardKey;
+    this.jumpKey = jumpKey;
+    this.colR = colR;
+    this.colG = colG;
+    this.colB = colB;
+    this.startX = x; // Store starting position for resets
+    this.startY = y;
+    this.startTheta = theta;
+  }
+
+  update() {
+    if (this.onGround) {
+      if (keyIsDown(this.leftKey)) this.theta -= 0.05;
+      if (keyIsDown(this.rightKey)) this.theta += 0.05;
+      if (keyIsDown(this.forwardKey)) this.speed = 1;
+      else if (keyIsDown(this.backwardKey)) this.speed = -1;
+      else this.speed = 0;
+      if (keyIsDown(this.jumpKey)) {
+        this.vz = 5;
+        this.onGround = false;
+      }
+    }
+    this.x += this.speed * cos(this.theta);
+    this.y += this.speed * sin(this.theta);
+    this.z += this.vz;
+    if (this.z <= 0) {
+      this.z = 0;
+      this.vz = 0;
+      this.onGround = true;
+    } else {
+      this.vz -= 0.1;
+    }
+    this.x = constrain(this.x, -50, 50);
+    this.y = constrain(this.y, -25, 25);
+  }
+
+  draw() {
+    let points = [
+      [-2, -1],
+      [2, -1],
+      [2, 1],
+      [-2, 1],
+      [2, -0.5],
+      [3, 0],
+      [2, 0.5],
+    ];
+    let rotatedPoints = points.map((p) => {
+      let lx = p[0];
+      let ly = p[1];
+      let rx = lx * cos(this.theta) - ly * sin(this.theta);
+      let ry = lx * sin(this.theta) + ly * cos(this.theta);
+      return [this.x + rx, this.y + ry, this.z];
+    });
+    let canvasPoints = rotatedPoints.map((p) =>
+      worldToCanvas(p[0], p[1], p[2])
+    );
+    fill(this.colR, this.colG, this.colB);
+    beginShape();
+    for (let cp of canvasPoints.slice(0, 4)) vertex(cp[0], cp[1]);
+    endShape(CLOSE);
+    fill(255, 255, 0);
+    beginShape();
+    for (let cp of canvasPoints.slice(4)) vertex(cp[0], cp[1]);
+    endShape(CLOSE);
+  }
+
+  collideWithBall(ball) {
+    let dx = this.x - ball.x;
+    let dy = this.y - ball.y;
+    let dist = sqrt(dx * dx + dy * dy);
+    let minDist = 3;
+    if (dist < minDist) {
+      let angle = atan2(dy, dx);
+      ball.vx += this.speed * cos(this.theta) * 1.5 - cos(angle) * 0.5;
+      ball.vy += this.speed * sin(this.theta) * 1.5 - sin(angle) * 0.5;
+      if (this.z > 0 && ball.z < 2) ball.vz = this.vz * 0.8;
+    }
+  }
+
+  reset() {
+    this.x = this.startX;
+    this.y = this.startY;
+    this.z = 0;
+    this.theta = this.startTheta;
+    this.speed = 0;
+    this.vz = 0;
+    this.onGround = true;
+  }
+}
+
+class Ball {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.z = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.vz = 0;
+  }
+
+  update() {
+    this.x += this.vx;
+    if (this.x < -50) {
+      this.x = -50;
+      this.vx = -this.vx * 0.8;
+    } else if (this.x > 50) {
+      this.x = 50;
+      this.vx = -this.vx * 0.8;
+    }
+    this.y += this.vy;
+    if (this.y < -25) {
+      this.y = -25;
+      this.vy = -this.vy * 0.8;
+    } else if (this.y > 25) {
+      this.y = 25;
+      this.vy = -this.vy * 0.8;
+    }
+    this.z += this.vz;
+    if (this.z <= 0) {
+      this.z = 0;
+      this.vz = -this.vz * 0.8;
+    } else {
+      this.vz -= 0.1;
+    }
+    this.vx *= 0.99;
+    this.vy *= 0.99;
+  }
+
+  draw() {
+    let [cx, cy] = worldToCanvas(this.x, this.y, this.z);
+    fill(255);
+    ellipse(cx, cy, 10, 10);
+  }
+
+  checkGoals() {
+    // Goal 1 (y = -25, team 2 scores)
+    if (
+      this.x >= -10 &&
+      this.x <= 10 &&
+      this.y <= -24 &&
+      this.y >= -25 &&
+      this.z < 5
+    ) {
+      score2++;
+      this.reset();
+      car1.reset();
+      car2.reset();
+    }
+    // Goal 2 (y = 25, team 1 scores)
+    if (
+      this.x >= -10 &&
+      this.x <= 10 &&
+      this.y >= 24 &&
+      this.y <= 25 &&
+      this.z < 5
+    ) {
+      score1++;
+      this.reset();
+      car1.reset();
+      car2.reset();
+    }
+  }
+
+  reset() {
+    this.x = 0;
+    this.y = 0;
+    this.z = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.vz = 0;
+  }
+}
+
+function worldToCanvas(x, y, z) {
+  let screenX = (x - y) * scale;
+  let screenY = ((x + y) * scale) / 2 + z * scaleZ;
+  let canvasX = width / 2 + screenX;
+  let canvasY = height / 2 - screenY;
+  return [canvasX, canvasY];
+}
+
+function drawField() {
+  let p1 = worldToCanvas(-50, -25, 0);
+  let p2 = worldToCanvas(50, -25, 0);
+  let p3 = worldToCanvas(50, 25, 0);
+  let p4 = worldToCanvas(-50, 25, 0);
+  fill(0, 100, 0);
+  quad(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], p4[0], p4[1]);
+  stroke(255);
+  let c1 = worldToCanvas(-50, 0, 0);
+  let c2 = worldToCanvas(50, 0, 0);
+  line(c1[0], c1[1], c2[0], c2[1]);
+  let g1 = worldToCanvas(-10, -25, 0);
+  let g2 = worldToCanvas(10, -25, 0);
+  let g3 = worldToCanvas(10, -24, 0);
+  let g4 = worldToCanvas(-10, -24, 0);
+  fill(255, 0, 0);
+  quad(g1[0], g1[1], g2[0], g2[1], g3[0], g3[1], g4[0], g4[1]);
+  let g5 = worldToCanvas(-10, 25, 0);
+  let g6 = worldToCanvas(10, 25, 0);
+  let g7 = worldToCanvas(10, 24, 0);
+  let g8 = worldToCanvas(-10, 24, 0);
+  quad(g5[0], g5[1], g6[0], g6[1], g7[0], g7[1], g8[0], g8[1]);
+}
+
+function drawScore() {
+  fill(0);
+  textSize(20);
+  textAlign(CENTER);
+  text(`Team 1 (Blue): ${score1}`, width / 2, 20);
+  text(`Team 2 (Orange): ${score2}`, width / 2, 40);
+}
+
+let car1, car2, ball;
+
+function setup() {
+  createCanvas(800, 600);
+  scale = 800 / 150;
+  scaleZ = scale;
+  car1 = new Car(
+    -10,
+    0,
+    0,
+    LEFT_ARROW,
+    RIGHT_ARROW,
+    UP_ARROW,
+    DOWN_ARROW,
+    32,
+    0,
+    0,
+    255
+  );
+  car2 = new Car(10, 0, PI, 65, 68, 87, 83, 32, 255, 165, 0);
+  ball = new Ball(0, 0);
+}
+
+function draw() {
+  background(220);
+  drawField();
+  car1.update();
+  car1.collideWithBall(ball);
+  car1.draw();
+  car2.update();
+  car2.collideWithBall(ball);
+  car2.draw();
+  ball.update();
+  ball.checkGoals();
+  ball.draw();
+  drawScore();
+}
